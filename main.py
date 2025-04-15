@@ -4,6 +4,8 @@ from pathlib import Path
 import pandas as pd
 import timesfm
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+import matplotlib.pyplot as plt
 
 app = FastAPI()
 
@@ -39,7 +41,6 @@ def load_data():
             if not cursor.fetchone():
                 raise HTTPException(status_code=404, detail=f"Таблица {TABLE_NAME} не найдена")
 
-            # Берем последние 1000 записей в правильном порядке
             df = pd.read_sql(
                 f"""
                 SELECT * FROM (
@@ -114,14 +115,30 @@ def predict():
             "point_forecast": point_forecast[0],
         })
 
-        print("Прогноз завершён")
+        # Визуализация прогноза
+        plt.figure(figsize=(12, 6))
+        plt.plot(df["timestamp"], df["close"], label="Исторические данные", color="blue")
+        plt.plot(forecast_df["timestamp"], forecast_df["point_forecast"], label="Прогноз", color="orange")
+        plt.xlabel("Дата")
+        plt.ylabel("Цена BTC/USDT")
+        plt.title("Прогноз цены Bitcoin")
+        plt.legend()
+        plt.grid()
+
+        plot_path = BASE_DIR / "forecast_plot.png"
+        plt.tight_layout()
+        plt.savefig(plot_path)
+        plt.close()
+
+        print("Прогноз завершён и график сохранён")
 
         return {
             "symbol": "BTC/USDT",
             "timeframe": "1d",
             "last_historical_timestamp": df["timestamp"].iloc[-1].isoformat(),
             "last_historical_price": float(df["close"].iloc[-1]),
-            "forecast": forecast_df.to_dict(orient="records")
+            "forecast": forecast_df.to_dict(orient="records"),
+            "plot_url": "/plot"
         }
 
     except HTTPException as e:
@@ -130,6 +147,14 @@ def predict():
     except Exception as e:
         print(f"Ошибка при прогнозировании: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Ошибка при прогнозировании: {str(e)}")
+
+# Эндпоинт для получения графика прогноза
+@app.get("/plot")
+def get_plot():
+    plot_path = BASE_DIR / "forecast_plot.png"
+    if not plot_path.exists():
+        raise HTTPException(status_code=404, detail="График ещё не создан")
+    return FileResponse(path=plot_path, media_type="image/png", filename="forecast_plot.png")
 
 # Запуск (для отладки)
 if __name__ == "__main__":
