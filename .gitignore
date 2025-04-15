@@ -1,0 +1,8 @@
+.env
+__pycache__/
+crypto_data.db
+.ipynb_checkpoints/
+*.log
+.DS_Store
+market_env/
+dataset
